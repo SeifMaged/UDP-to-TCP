@@ -89,3 +89,34 @@ class TCPonUDP():
         seq, ack, flags = struct.unpack("!IIB", header) # Unpaak header
 
         return seq, ack, flags, payload
+    
+
+    # Implemented But Not Called Yet
+    def sendto_with_loss_or_corruption(self, packet, address):
+        randomValue = random.random() # generate random value to introduce % of loss or corruption
+        
+        # Do nothing to simulate packet loss
+        if randomValue < self.packetLossProbability:
+            print("Packet Lost.")
+            return
+
+        # Simulate Corruption by flipping a random bit in a random byte in the packet or for more aggressive option flip all bitss
+        if randomValue < self.packetCorruptionProbability:
+
+            corruptedIndex = random.randint(0, len(packet) - 1)
+            corruptedByte = self.corrupt_byte(packet[corruptedIndex])
+
+            packet = packet[:corruptedIndex] + bytes([corruptedByte]) + packet[corruptedIndex + 1:]
+
+            print("Packet Corrupted...")
+
+        self.sock.sendto(packet, address)
+    
+    def corrupt_byte(byte, aggressiveCorruption=False):
+        if aggressiveCorruption:
+            return byte ^ 0xFF  # flip all bits in the byte
+        else:
+            bit_to_flip = 1 << random.randint(0, 7) 
+            return byte ^ bit_to_flip   # flip only a single random bit
+
+
