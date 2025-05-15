@@ -1,18 +1,22 @@
 import socket
 import struct
+import random
+
 SYN = 0x01
 ACK = 0x02
 FIN = 0x04
 
 class TCPonUDP():
-    def __init__(self, local_ip, local_port,timeout =1.0):
+    def __init__(self, local_ip, local_port,timeout =1.0, packetLossProbability=0.05, packetCorruptionProbability=0.05):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((local_ip, local_port))
         self.peer = None
         self.seq = 0
         self.ack = 1
         self.running = True
-        self.timeout = timeout  
+        self.timeout = timeout
+        self.packetLossProbability = packetLossProbability
+        self.packetCorruptionProbability = packetCorruptionProbability
 
     
 
@@ -62,3 +66,26 @@ class TCPonUDP():
             ack_packet = self.create_packet(server_seq + 1, ACK)
          #   self.sock.sendto(ack_packet, self.server_addr)  still need to implement
             print("Connection established")
+
+    
+    ##
+    def parse_packet(self, packet):
+        if len(packet) < 9:  # 2 for checksum - 4 for seq - 4 for ack - 1 for flags
+            print("Invalid Packet: Too short.") # Doesn't meet minimum packet size requirement 
+            return None
+
+        packetChecksum = struct.unpack("!H", packet[:2])[0]
+
+        header = packet[2:11] # seq + ack + flags without checksum
+        payload = packet[11:]
+
+        
+        calculatedChecksum = self.udp_checksum(header + payload) # Recalculate Checksum For Comparison With Received Packet Checksum
+        
+        if packetChecksum != calculatedChecksum:
+            print("Invalid Packet: Checksum Mismatch.")
+            return None
+
+        seq, ack, flags = struct.unpack("!IIB", header) # Unpaak header
+
+        return seq, ack, flags, payload
