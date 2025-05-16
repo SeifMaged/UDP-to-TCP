@@ -1,0 +1,50 @@
+from UDP_to_TCP import TCPonUDP
+import socket
+
+server_host = "127.0.0.1"
+server_port = 8081
+
+
+class HTTPClient:
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.conn = TCPonUDP(server_host, server_port, bind=False)
+
+    def send_get(self, path="/index.html"):
+        self.conn.connect((server_host, server_port))
+        request = self.build_get_request(path)
+        self.conn.send_data(0, request.encode())
+        self.conn.serve_connection()
+        # self.conn.close()
+
+    def send_post(self, path="/submit", body="name=Alex&age=22"):
+        self.conn.connect((server_host, server_port))
+        request = self.build_post_request(path, body)
+        self.conn.send_data(0, request.encode())
+        self.conn.serve_connection()
+        # self.conn.close()
+
+    def build_get_request(self, path: str) -> str:
+        return f"""GET {path} HTTP/1.0\r
+        Host: {server_host}\r
+        Connection: close\r
+        \r
+        """
+
+    def build_post_request(self, path: str, body: str) -> str:
+        return f"""POST {path} HTTP/1.0\r
+        Host: {server_host}\r
+        Content-Length: {len(body)}\r
+        Connection: close\r
+        \r
+        {body}"""
+
+
+if __name__ == "__main__":
+    client = HTTPClient()
+
+    print("[CLIENT] Sending GET request...")
+    client.send_get("/index.html")
+
+    # print("\n[CLIENT] Sending POST request...")
+    # client.send_post("/submit", "name=TestUser&email=test@example.com")
