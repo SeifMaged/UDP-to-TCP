@@ -13,8 +13,8 @@ class TCPonUDP:
         local_ip,
         local_port,
         timeout=5.0,
-        packetLossProbability=0.05,
-        packetCorruptionProbability=0.05,
+        packetLossProbability=0.00,
+        packetCorruptionProbability=0.0,
         bind=True,
     ):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -49,49 +49,21 @@ class TCPonUDP:
         packet = struct.pack("!H", chksum) + header + payload
         return packet
 
-    """
-    def segment_payload(self,flags,data):
-        segments = []
-        for d in range(0, len(data), self.MSS):
-            chunk = data[d:d + self.MSS]
-            packet = self.create_packet(self.seq, self.ack, flags, chunk)
-            segments.append(packet)
-            self.seq = 1 - self.seq
-            self.ack = 1-self.ack
-        return segments
-    """
-
-    """
-    def segment_payload(self,flags,data):
-        segments = []
-        for d in range(0, len(data), self.MSS):
-            chunk = data[d:d + self.MSS]
-            packet = self.create_packet(seq, self.ack, flags, chunk)
-            segments.append(packet)
-            self.seq = 1 - self.seq
-            self.ack = 1-self.ack
-        return segments
-    """
-
-    def connect(self, server_address):  # client side of hanshake
+    def connect(self, server_address):  # client side of handshake
         self.peer = server_address
         syn_packet = self.create_packet(SYN)
         self.seq = 1 - self.seq
-        self.sock.sendto(syn_packet, self.peer)
 
-        # Step 2: Receive SYN-ACK
-        self.sock.settimeout(self.timeout)
-        response, _ = self.sock.recvfrom(1024)
-        server_seq, server_ack, flags, payload = self.parse_packet(response)
+        # Step 1: Send SYN and wait for SYN-ACK
+        success = self.send_with_retransmission(syn_packet, SYN | ACK)
+        if not success:
+            raise TimeoutError("Handshake failed: No SYN-ACK received.")
 
-        if flags & (SYN | ACK):
-            print("Received SYN-ACK")
-            self.ack = server_seq + 1
+        # Step 2: Send ACK to complete handshake
+        ack_packet = self.create_packet(ACK)
+        self.sock.sendto(ack_packet, self.peer)
+        print("Connection Established.")
 
-            # Step 3: Send ACK
-            ack_packet = self.create_packet(ACK)  # '''server_seq + 1,'''
-            self.sock.sendto(ack_packet, self.peer)
-            print("Connection established")
 
     def accept(self):  # server side of hanshake
         print("Server listening for handshake...")
@@ -133,25 +105,50 @@ class TCPonUDP:
             except socket.timeout:
                 print("Timeout waiting for handshake packets")
 
+    # def serve_connection(self):
+    #     print("Server ready to receive data or close connection...")
+    #     while self.running:
+    #         try:
+    #             data, addr = self.sock.recvfrom(1024)
+    #             seq, ack, flags, payload = self.parse_packet(data)
+
+    #             if flags & FIN:
+    #                 print("Received FIN from client. Sending ACK and closing.")
+    #                 ack_packet = self.create_packet(ACK)
+    #                 self.sock.sendto(ack_packet, self.peer)
+    #                 # Step 3: Server sends its own FIN
+    #                 fin_packet = self.create_packet(FIN)
+    #                 self.sock.sendto(fin_packet, self.peer)
+    #                 self.running = False
+    #                 self.sock.close()
+    #                 break
+
+    #             # Else handle data packets here...
+    #             print("Received data:", payload)
+    #             return payload.decode()
+
+    #         except socket.timeout:
+    #             continue
+
     def serve_connection(self):
-        print("Server ready to receive data or close connection...")
+        print("Client ready to receive data or close connection...")
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(1024)
                 seq, ack, flags, payload = self.parse_packet(data)
 
                 if flags & FIN:
-                    print("Received FIN from client. Sending ACK and closing.")
+                    print("Received FIN from server. Sending ACK and closing.")
                     ack_packet = self.create_packet(ACK)
                     self.sock.sendto(ack_packet, self.peer)
-                    # Step 3: Server sends its own FIN
-                    fin_packet = self.create_packet(FIN)
-                    self.sock.sendto(fin_packet, self.peer)
                     self.running = False
                     self.sock.close()
                     break
 
-                # Else handle data packets here...
+                # ACK the data packet we just received
+                ack_packet = self.create_packet(ACK)
+                self.sock.sendto(ack_packet, self.peer)
+
                 print("Received data:", payload)
                 return payload.decode()
 
@@ -206,9 +203,7 @@ class TCPonUDP:
 
     # Implemented But Not Called Yet
     def sendto_with_loss_or_corruption(self, packet, address):
-        randomValue = (
-            random.random()
-        )  # generate random value to introduce % of loss or corruption
+        randomValue = random.random()# generate random value to introduce % of loss or corruption
 
         # Do nothing to simulate packet loss
         if randomValue < self.packetLossProbability:
@@ -230,6 +225,29 @@ class TCPonUDP:
             print("Packet Corrupted...")
 
         self.sock.sendto(packet, address)
+    
+    def send_with_retransmission(self, packet, expect_ack_flag, max_retries=5):
+        retries = 0
+        while retries < max_retries:
+
+            self.sendto_with_loss_or_corruption(packet, self.peer)
+            
+            try:
+
+                self.sock.settimeout(self.timeout)
+                response, _ = self.sock.recvfrom(1024)
+                _, _, flags, _ = self.parse_packet(response) # seq, ack, flags, payload
+                
+                if flags & expect_ack_flag:
+                    return True  # ACK received
+                
+            except (socket.timeout, ValueError):
+                retries += 1
+                print(f"Retrying... ({retries}/{max_retries})")
+        print("Max tries reached. Abandoning.")
+
+        return False
+
 
     def corrupt_byte(self, byte, aggressiveCorruption=False):
         if aggressiveCorruption:
@@ -238,8 +256,17 @@ class TCPonUDP:
             bit_to_flip = 1 << random.randint(0, 7)
             return byte ^ bit_to_flip  # flip only a single random bit
 
+
+    # base
+
     def send_data(self, flags=ACK, payload=b""):
         packet = self.create_packet(flags, payload)
         self.seq = 1 - self.seq
         self.ack = 1 - self.ack
-        self.sock.sendto(packet, self.peer)
+        #self.sock.sendto(packet, self.peer)
+        success = self.send_with_retransmission(packet, ACK)
+        if not success:
+            print("Failed to transmit data.")
+
+
+    
