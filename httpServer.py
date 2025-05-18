@@ -57,7 +57,7 @@ class HTTPServer:
         return headers
 
     def http_get(self, path: str) -> str:
-        if path == "/index.html":
+        if "/index.html" in path:
             return self.http_response(
                 200,
                 "OK",
