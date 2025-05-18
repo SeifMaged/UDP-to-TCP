@@ -48,4 +48,4 @@ if __name__ == "__main__":
     client = HTTPClient()
 
     print("[CLIENT] Sending GET request...")
-    client.send_post("/index.html")
+    client.send_get("/index.html")

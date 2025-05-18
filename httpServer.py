@@ -57,15 +57,26 @@ class HTTPServer:
         return headers
 
     def http_get(self, path: str) -> str:
-        return self.http_response(
-            200,
-            "OK",
-            headers={
-                "Content-Type": "text/html",
-                "Connection": "close",
-            },
-            body="OK",
-        )
+        if path == "/index.html":
+            return self.http_response(
+                200,
+                "OK",
+                headers={
+                    "Content-Type": "text/html",
+                    "Connection": "close",
+                },
+                body="<h1>Welcome to my server</h1>",
+            )
+        else:
+            return self.http_response(
+                404,
+                "Not Found",
+                headers={
+                    "Content-Type": "text/plain",
+                    "Connection": "close",
+                },
+                body="404 Not Found.",
+            )
 
     def http_post(self, path: str, body: str) -> str:
         print(f"[SERVER] POST data received at {path}: {body}")
