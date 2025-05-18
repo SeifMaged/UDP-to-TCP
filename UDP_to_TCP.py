@@ -14,8 +14,8 @@ class TCPonUDP:
         local_ip,
         local_port,
         timeout=10.0,
-        packetLossProbability=0.00,
-        packetCorruptionProbability=0.30,
+        packetLossProbability=0.10,
+        packetCorruptionProbability=0.10,
         bind=True,
     ):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -116,7 +116,11 @@ class TCPonUDP:
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(1024)
-                seq, ack, flags, payload = self.parse_packet(data)
+                try:
+                    seq, ack, flags, payload = self.parse_packet(data)
+                except ValueError as ve:
+                    print(f"[SERVER] Packet error: {ve}. Ignoring corrupted packet.")
+                    continue  # Skip this packet, wait for retransmission
 
                 # ACK the request
                 ack_packet = self.create_packet(ACK)
@@ -130,12 +134,12 @@ class TCPonUDP:
                     self.sock.close()
                     break
 
-                # return the payload for processing
                 print("Received data:", payload)
                 return payload.decode()
 
             except socket.timeout:
                 continue
+
 
 
     def close(self):
