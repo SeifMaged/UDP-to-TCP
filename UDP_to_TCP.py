@@ -56,7 +56,7 @@ class TCPonUDP:
         self.seq = 1 - self.seq
         self.sock.sendto(syn_packet, self.peer)
 
-        # Step 2: Receive SYN-ACK
+        # Receive SYN-ACK
         self.sock.settimeout(self.timeout)
         response, _ = self.sock.recvfrom(1024)
         server_seq, server_ack, flags, payload = self.parse_packet(response)
@@ -65,7 +65,7 @@ class TCPonUDP:
             print("Received SYN-ACK")
             self.ack = server_seq + 1
 
-            # Step 3: Send ACK
+            # Send ACK
             ack_packet = self.create_packet(ACK)  # '''server_seq + 1,'''
             self.sock.sendto(ack_packet, self.peer)
             print("Connection established")
@@ -125,7 +125,7 @@ class TCPonUDP:
                 # ACK the request
                 ack_packet = self.create_packet(ACK)
                 self.sock.sendto(ack_packet, self.peer)
-                print("Sent ACK for GET")
+                print("Sent ACK")
 
                 if flags & FIN:
                     print("Received FIN from client. Sending ACK and closing.")
@@ -139,8 +139,6 @@ class TCPonUDP:
 
             except socket.timeout:
                 continue
-
-
 
     def close(self):
         if not self.peer:
@@ -210,9 +208,7 @@ class TCPonUDP:
         # generate random value to introduce % of loss or corruption
 
         # Do nothing to simulate packet loss
-        val = random.random()
-        print(val)
-        if val < self.packetLossProbability:
+        if random.random() < self.packetLossProbability:
             print("Packet Lost.")
             return
 
@@ -250,9 +246,9 @@ class TCPonUDP:
             self.seq = 1 - self.seq
             self.ack = 1 - self.ack
 
-    def send_with_retransmission(self, packet, expect_ack_flag, max_retries=5):
-        retries = 0
-        while retries < max_retries:
+    def send_with_retransmission(self, packet, expect_ack_flag, maximumRetransmissions=5):
+        retransmissions = 0
+        while retransmissions < maximumRetransmissions:
             self.sendto_with_loss_or_corruption(packet, self.peer)
             try:
                 self.sock.settimeout(self.timeout)
@@ -263,15 +259,15 @@ class TCPonUDP:
                     print("ACK received")
                     return True
 
-                # We got a packet, but it wasn’t the ACK we were waiting for.
-                retries += 1
-                print(f"Unexpected packet (flags=0x{flags:02x}), treating as retry ({retries}/{max_retries})")
+                # If packet received, but it wasn’t the ACK we were waiting for.
+                retransmissions += 1
+                print(f"Unexpected packet (flags=0x{flags:02x}), treating as retry ({retransmissions}/{maximumRetransmissions})")
                 time.sleep(0.2)
 
             except (socket.timeout, ValueError):
-                retries += 1
-                print(f"Timeout or parse error, retrying… ({retries}/{max_retries})")
+                retransmissions += 1
+                print(f"Timeout or parse error, retrying… ({retransmissions}/{maximumRetransmissions})")
                 time.sleep(0.3)
 
-        print("Failed after max retries.")
+        print("Maximum Retries reached. Recheck your connection.")
         return False

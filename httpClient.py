@@ -1,6 +1,5 @@
 from UDP_to_TCP import TCPonUDP
 import socket
-import time
 
 server_host = "127.0.0.1"
 server_port = 8081
@@ -49,7 +48,4 @@ if __name__ == "__main__":
     client = HTTPClient()
 
     print("[CLIENT] Sending GET request...")
-    client.send_get("/index.html")
-
-    # print("\n[CLIENT] Sending POST request...")
-    # client.send_post("/Post message", "This is the body of post request")
+    client.send_post("/index.html")

@@ -1,11 +1,8 @@
-import os
 from UDP_to_TCP import TCPonUDP
-import socket
 
 ACK = 0x02
 server_host = "127.0.0.1"
 server_port = 8081
-# directory = "httpFiles"
 
 
 class HTTPServer:
