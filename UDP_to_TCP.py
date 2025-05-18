@@ -1,6 +1,7 @@
 import socket
 import struct
 import random
+import time
 
 SYN = 0x01
 ACK = 0x02
@@ -13,8 +14,8 @@ class TCPonUDP:
         local_ip,
         local_port,
         timeout=10.0,
-        packetLossProbability=0.05,
-        packetCorruptionProbability=0.00,
+        packetLossProbability=0.00,
+        packetCorruptionProbability=0.30,
         bind=True,
     ):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -109,12 +110,18 @@ class TCPonUDP:
             except socket.timeout:
                 print("Timeout waiting for handshake packets")
 
+
     def serve_connection(self):
         print("Server ready to receive data or close connection...")
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(1024)
                 seq, ack, flags, payload = self.parse_packet(data)
+
+                # ACK the request
+                ack_packet = self.create_packet(ACK)
+                self.sock.sendto(ack_packet, self.peer)
+                print("Sent ACK for GET")
 
                 if flags & FIN:
                     print("Received FIN from client. Sending ACK and closing.")
@@ -123,12 +130,13 @@ class TCPonUDP:
                     self.sock.close()
                     break
 
-                # Else handle data packets here...
+                # return the payload for processing
                 print("Received data:", payload)
                 return payload.decode()
 
             except socket.timeout:
                 continue
+
 
     def close(self):
         if not self.peer:
@@ -198,7 +206,9 @@ class TCPonUDP:
         # generate random value to introduce % of loss or corruption
 
         # Do nothing to simulate packet loss
-        if random.random() < self.packetLossProbability:
+        val = random.random()
+        print(val)
+        if val < self.packetLossProbability:
             print("Packet Lost.")
             return
 
@@ -232,25 +242,32 @@ class TCPonUDP:
         success = self.send_with_retransmission(packet, ACK)
         if not success:
             print("Failed to transmit data.")
+            #Return seq and ack to prev state
+            self.seq = 1 - self.seq
+            self.ack = 1 - self.ack
 
     def send_with_retransmission(self, packet, expect_ack_flag, max_retries=5):
         retries = 0
         while retries < max_retries:
-
             self.sendto_with_loss_or_corruption(packet, self.peer)
-            
             try:
-
                 self.sock.settimeout(self.timeout)
                 response, _ = self.sock.recvfrom(1024)
-                _, _, flags, _ = self.parse_packet(response) # seq, ack, flags, payload
+                _, _, flags, _ = self.parse_packet(response)
                 
                 if flags & expect_ack_flag:
-                    return True  # ACK received
-                
+                    print("ACK received")
+                    return True
+
+                # We got a packet, but it wasn’t the ACK we were waiting for.
+                retries += 1
+                print(f"Unexpected packet (flags=0x{flags:02x}), treating as retry ({retries}/{max_retries})")
+                time.sleep(0.2)
+
             except (socket.timeout, ValueError):
                 retries += 1
-                print(f"Retrying... ({retries}/{max_retries})")
-        print("Max tries reached. Abandoning.")
+                print(f"Timeout or parse error, retrying… ({retries}/{max_retries})")
+                time.sleep(0.3)
 
+        print("Failed after max retries.")
         return False

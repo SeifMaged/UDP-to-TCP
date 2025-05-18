@@ -4,7 +4,7 @@ import time
 
 server_host = "127.0.0.1"
 server_port = 8081
-
+ACK = 0x02
 
 class HTTPClient:
     def __init__(self):
@@ -14,7 +14,7 @@ class HTTPClient:
     def send_get(self, path="/index.html"):
         self.conn.connect((server_host, server_port))
         request = self.build_get_request(path)
-        self.conn.send_data(0, request.encode())
+        self.conn.send_data(ACK, request.encode())
         response = self.conn.serve_connection()
         print("[CLIENT] Received response:")
         print(response)
@@ -23,7 +23,7 @@ class HTTPClient:
     def send_post(self, path="/submit", body=""):
         self.conn.connect((server_host, server_port))
         request = self.build_post_request(path, body)
-        self.conn.send_data(0, request.encode())
+        self.conn.send_data(ACK, request.encode())
         response = self.conn.serve_connection()
         print("[CLIENT] Received response:")
         print(response)
